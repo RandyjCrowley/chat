@@ -2,12 +2,70 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Speech to Text Chatbot</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Bot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        #chat-container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 70%;
+        }
+        .user-message {
+            background-color: #e1f5fe;
+            margin-left: auto;
+        }
+        .ai-message {
+            background-color: #f0f4c3;
+        }
+        #controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+        }
+        #status {
+            font-style: italic;
+            color: #666;
+        }
+    </style>
 </head>
 <body>
-    <button id="start-recording">Start Recording</button>
-    <button id="stop-recording" disabled>Stop Recording</button>
-    <div id="output"></div>
+    <h1>AI Chat Bot</h1>
+    <div id="chat-container"></div>
+    <div id="controls">
+        <button id="start-recording">Start Recording</button>
+        <button id="stop-recording" disabled>Stop Recording</button>
+        <span id="status"></span>
+    </div>
+
     <script>
     let socket;
     let mediaRecorder;
@@ -16,6 +74,24 @@
     const VOLUME_THRESHOLD = 0.01; // Adjust this value based on sensitivity
     let silenceTimer;
     let analyser;
+
+    function addMessage(text, isUser = false) {
+        const chatContainer = document.getElementById('chat-container');
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message');
+        messageElement.classList.add(isUser ? 'user-message' : 'ai-message');
+        messageElement.textContent = text;
+        chatContainer.appendChild(messageElement);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function updateConversationHistory(history) {
+        const chatContainer = document.getElementById('chat-container');
+        chatContainer.innerHTML = ''; // Clear existing messages
+        history.forEach(message => {
+            addMessage(message.content, message.role === 'user');
+        });
+    }
 
     document.getElementById('start-recording').addEventListener('click', async () => {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -33,12 +109,13 @@
             const audioBlob = new Blob(audioChunks, { 'type' : 'audio/wav' });
             audioChunks = [];
             socket.send(audioBlob);
+            document.getElementById('status').textContent = 'Processing...';
         };
         mediaRecorder.start();
         document.getElementById('start-recording').disabled = true;
         document.getElementById('stop-recording').disabled = false;
+        document.getElementById('status').textContent = 'Recording...';
 
-        // Silence detection logic
         function checkSilence() {
             const buffer = new Float32Array(analyser.frequencyBinCount);
             analyser.getFloatTimeDomainData(buffer);
@@ -61,15 +138,14 @@
             }
         }
 
-        // Check for silence periodically
         const silenceInterval = setInterval(checkSilence, 100);
 
-        // Clear interval when recording stops
         mediaRecorder.onstop = () => {
             clearInterval(silenceInterval);
             const audioBlob = new Blob(audioChunks, { 'type' : 'audio/wav' });
             audioChunks = [];
             socket.send(audioBlob);
+            document.getElementById('status').textContent = 'Processing...';
         };
     });
 
@@ -78,23 +154,37 @@
             mediaRecorder.stop();
             document.getElementById('stop-recording').disabled = true;
             document.getElementById('start-recording').disabled = false;
+            document.getElementById('status').textContent = 'Stopped recording';
         }
     });
 
-    // Setup WebSocket connection to localhost:8765
-    socket = new WebSocket('ws://localhost:8765');
+    socket = new WebSocket('ws://randy.local:8765');
+    
     socket.onmessage = function(event) {
-        document.getElementById('output').innerText += "\nReceived: " + event.data;
+        const response = JSON.parse(event.data);
+        updateConversationHistory(response.history);
+        
+        // Play the audio response
+        const audio = new Audio('data:audio/mp3;base64,' + response.audio);
+        audio.play();
+        
+        document.getElementById('status').textContent = '';
+        document.getElementById('start-recording').disabled = false;
     };
+
     socket.onopen = function(event) {
-        document.getElementById('output').innerText = "WebSocket is open now.";
+        document.getElementById('status').textContent = 'Connected to AI';
     };
+
     socket.onclose = function(event) {
-        document.getElementById('output').innerText = "WebSocket is closed now.";
+        document.getElementById('status').textContent = 'Disconnected from AI';
     };
+
     socket.onerror = function(error) {
         console.error('WebSocket Error:', error);
+        document.getElementById('status').textContent = 'Error connecting to AI';
     };
     </script>
 </body>
 </html>
+

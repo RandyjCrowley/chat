@@ -1,14 +1,45 @@
+import os
 import sqlite3
 
-# Connect to SQLite database
-conn = sqlite3.connect('conversations.db')
+from dotenv import load_dotenv
+
+load_dotenv()
+# Connect to your SQLite database (or create it if it doesn't exist)
+conn = sqlite3.connect(os.getenv("DATABASE_NAME"))
 cursor = conn.cursor()
 
-# Create tables for users, prompts, and conversation history
-cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS prompts (id INTEGER PRIMARY KEY, character TEXT, prompt TEXT)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, user_id INTEGER, character TEXT, role TEXT, content TEXT, FOREIGN KEY(user_id) REFERENCES users(id))''')
+# Create the users table
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip_address VARCHAR(45) UNIQUE,
+    selected_character VARCHAR(255) DEFAULT 'Santa'
+)
+''')
 
-# Insert default prompts for Santa and Tooth Fairy
-cursor.execute("INSERT OR IGNORE INTO prompts (character, prompt) VALUES ('Santa', 'DO NOT INCLUDE WORDS SIMILAR OR LIKE...')")
+# Create the conversation_history table
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS conversation_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    role TEXT, -- 'user' or 'assistant'
+    content TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    character VARCHAR(255),
+    FOREIGN KEY (user_id) REFERENCES users (id)
+)
+''')
+
+# Create the prompts table
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS prompts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    character TEXT,
+    prompt TEXT
+)
+''')
+
+# Commit the changes and close the connection
 conn.commit()
+conn.close()
+
